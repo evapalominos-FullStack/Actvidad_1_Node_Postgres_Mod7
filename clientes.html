@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Clientes</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Segoe UI', sans-serif;
+      background: #f0f4f8;
+      min-height: 100vh;
+      padding: 2rem;
+    }
+
+    header {
+      background: linear-gradient(135deg, #7c3aed, #db2777);
+      color: #fff;
+      padding: 1.5rem 2rem;
+      border-radius: 12px;
+      margin-bottom: 2rem;
+    }
+    header h1 { font-size: 1.6rem; }
+    header p  { font-size: 0.9rem; opacity: 0.85; margin-top: .2rem; }
+
+    .toolbar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 1rem;
+    }
+    .toolbar span { font-weight: 600; color: #374151; }
+
+    .reload-btn {
+      background: #7c3aed;
+      color: #fff;
+      border: none;
+      padding: 0.45rem 1.1rem;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 0.85rem;
+    }
+    .reload-btn:hover { background: #6d28d9; }
+
+    /* Lista de clientes */
+    .lista { display: flex; flex-direction: column; gap: 0.75rem; }
+
+    .cliente-item {
+      background: #fff;
+      border-radius: 10px;
+      padding: 1rem 1.25rem;
+      box-shadow: 0 1px 6px rgba(0,0,0,0.07);
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      transition: transform .15s, box-shadow .15s;
+    }
+    .cliente-item:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 14px rgba(0,0,0,0.11);
+    }
+
+    .avatar {
+      width: 46px; height: 46px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, #7c3aed, #db2777);
+      color: #fff;
+      display: flex; align-items: center; justify-content: center;
+      font-weight: 700; font-size: 1.1rem;
+      flex-shrink: 0;
+    }
+
+    .info { flex: 1; }
+    .info .nombre { font-weight: 600; color: #111827; }
+    .info .detalle { font-size: 0.83rem; color: #6b7280; margin-top: 2px; }
+
+    .badge {
+      padding: 3px 12px;
+      border-radius: 999px;
+      font-size: 0.78rem;
+      font-weight: 700;
+    }
+    .badge-activo   { background: #d1fae5; color: #065f46; }
+    .badge-inactivo { background: #f3f4f6; color: #9ca3af; }
+
+    /* Estados */
+    .estado {
+      padding: 3rem;
+      text-align: center;
+      color: #6b7280;
+      background: #fff;
+      border-radius: 12px;
+    }
+
+    .spinner {
+      width: 36px; height: 36px;
+      border: 4px solid #e5e7eb;
+      border-top-color: #7c3aed;
+      border-radius: 50%;
+      animation: spin .7s linear infinite;
+      margin: 0 auto 0.8rem;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .error-box {
+      padding: 1rem 1.2rem;
+      background: #fee2e2;
+      border-left: 4px solid #ef4444;
+      border-radius: 8px;
+      color: #7f1d1d;
+      font-size: 0.9rem;
+    }
+  </style>
+</head>
+<body>
+
+  <header>
+    <h1>👥 Clientes</h1>
+    <p>Conexión por connection string · Pool · GET /clientes · Puerto 3002</p>
+  </header>
+
+  <div class="toolbar">
+    <span id="subtitle">Cargando...</span>
+    <button class="reload-btn" onclick="cargarDatos()">↺ Recargar</button>
+  </div>
+
+  <div id="contenido" class="estado">
+    <div class="spinner"></div>
+    <p>Consultando base de datos...</p>
+  </div>
+
+  <script>
+    const API_URL = 'http://localhost:3002/clientes';
+
+    async function cargarDatos() {
+      const contenido = document.getElementById('contenido');
+      const subtitle  = document.getElementById('subtitle');
+
+      contenido.innerHTML = '<div class="spinner"></div><p>Consultando base de datos...</p>';
+      contenido.className = 'estado';
+      subtitle.textContent = 'Cargando...';
+
+      try {
+        const res = await fetch(API_URL);
+
+        if (!res.ok) {
+          const json = await res.json().catch(() => ({}));
+          throw new Error(json.mensaje || `Error HTTP ${res.status}`);
+        }
+
+        const json = await res.json();
+        if (!json.ok) throw new Error(json.mensaje);
+
+        const clientes = json.data;
+        subtitle.textContent = `${clientes.length} cliente${clientes.length !== 1 ? 's' : ''} encontrados`;
+
+        if (clientes.length === 0) {
+          contenido.innerHTML = '<p>No hay clientes registrados.</p>';
+          return;
+        }
+
+        const items = clientes.map(c => {
+          const iniciales = c.nombre.split(' ').map(p => p[0]).slice(0, 2).join('').toUpperCase();
+          const estadoClass = c.activo ? 'badge-activo' : 'badge-inactivo';
+          const estadoText  = c.activo ? 'Activo' : 'Inactivo';
+          return `
+            <li class="cliente-item">
+              <div class="avatar">${iniciales}</div>
+              <div class="info">
+                <div class="nombre">${c.nombre}</div>
+                <div class="detalle">📧 ${c.email} &nbsp;·&nbsp; 📍 ${c.ciudad || '—'}</div>
+              </div>
+              <span class="badge ${estadoClass}">${estadoText}</span>
+            </li>
+          `;
+        }).join('');
+
+        contenido.className = '';
+        contenido.innerHTML = `<ul class="lista">${items}</ul>`;
+
+      } catch (err) {
+        subtitle.textContent = 'Error al cargar';
+        contenido.className = '';
+        contenido.innerHTML = `
+          <div class="error-box">
+            ⚠️ <strong>No se pudo conectar al servidor.</strong><br>
+            ${err.message}
+          </div>
+        `;
+      }
+    }
+
+    cargarDatos();
+  </script>
+</body>
+</html>

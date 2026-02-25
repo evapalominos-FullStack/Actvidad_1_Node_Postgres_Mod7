@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Finanzas Personales</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Segoe UI', sans-serif;
+      background: #f0f4f8;
+      min-height: 100vh;
+      padding: 2rem;
+    }
+
+    header {
+      background: linear-gradient(135deg, #1a56db, #0e9f6e);
+      color: #fff;
+      padding: 1.5rem 2rem;
+      border-radius: 12px;
+      margin-bottom: 2rem;
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+    }
+    header h1 { font-size: 1.6rem; }
+    header p  { font-size: 0.9rem; opacity: 0.85; }
+
+    .card {
+      background: #fff;
+      border-radius: 12px;
+      box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+      overflow: hidden;
+    }
+
+    .card-header {
+      padding: 1rem 1.5rem;
+      border-bottom: 1px solid #e5e7eb;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .card-header span { font-weight: 600; color: #374151; }
+
+    /* Tabla */
+    .table-wrap { overflow-x: auto; }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.92rem;
+    }
+    thead tr { background: #1a56db; color: #fff; }
+    thead th { padding: 0.75rem 1.2rem; text-align: left; font-weight: 600; }
+    tbody tr:nth-child(even) { background: #f9fafb; }
+    tbody tr:hover { background: #eff6ff; transition: background .15s; }
+    tbody td { padding: 0.7rem 1.2rem; color: #374151; border-bottom: 1px solid #e5e7eb; }
+
+    .badge {
+      display: inline-block;
+      padding: 2px 10px;
+      border-radius: 999px;
+      font-size: 0.78rem;
+      font-weight: 600;
+    }
+    .badge-green { background: #d1fae5; color: #065f46; }
+    .badge-red   { background: #fee2e2; color: #991b1b; }
+
+    /* Estado de carga / error */
+    .estado {
+      padding: 2rem;
+      text-align: center;
+      color: #6b7280;
+    }
+    .error-box {
+      margin: 1rem 1.5rem;
+      padding: 1rem 1.2rem;
+      background: #fee2e2;
+      border-left: 4px solid #ef4444;
+      border-radius: 6px;
+      color: #7f1d1d;
+      font-size: 0.9rem;
+    }
+
+    .spinner {
+      width: 36px; height: 36px;
+      border: 4px solid #e5e7eb;
+      border-top-color: #1a56db;
+      border-radius: 50%;
+      animation: spin .7s linear infinite;
+      margin: 0 auto 0.8rem;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .reload-btn {
+      background: #1a56db;
+      color: #fff;
+      border: none;
+      padding: 0.45rem 1.1rem;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 0.85rem;
+    }
+    .reload-btn:hover { background: #1648c0; }
+  </style>
+</head>
+<body>
+
+  <header>
+    <div>
+      <h1>💰 Finanzas Personales</h1>
+      <p>Conexión por configuración · Pool · GET /finanzas · Puerto 3001</p>
+    </div>
+  </header>
+
+  <div class="card">
+    <div class="card-header">
+      <span id="subtitle">Cargando...</span>
+      <button class="reload-btn" onclick="cargarDatos()">↺ Recargar</button>
+    </div>
+
+    <div id="error-container"></div>
+    <div id="contenido" class="estado">
+      <div class="spinner"></div>
+      <p>Consultando base de datos...</p>
+    </div>
+  </div>
+
+  <script>
+    const API_URL = 'http://localhost:3001/finanzas';
+
+    async function cargarDatos() {
+      const contenido = document.getElementById('contenido');
+      const errorContainer = document.getElementById('error-container');
+      const subtitle = document.getElementById('subtitle');
+
+      // Reset
+      errorContainer.innerHTML = '';
+      contenido.innerHTML = '<div class="spinner"></div><p>Consultando base de datos...</p>';
+      subtitle.textContent = 'Cargando...';
+
+      try {
+        const res = await fetch(API_URL);
+
+        // Error HTTP (ej: 500)
+        if (!res.ok) {
+          const json = await res.json().catch(() => ({}));
+          throw new Error(json.mensaje || `Error HTTP ${res.status}`);
+        }
+
+        const json = await res.json();
+
+        if (!json.ok) throw new Error(json.mensaje);
+
+        const datos = json.data;
+        subtitle.textContent = `${datos.length} registro${datos.length !== 1 ? 's' : ''} encontrados`;
+
+        if (datos.length === 0) {
+          contenido.innerHTML = '<p class="estado">No hay registros en la tabla.</p>';
+          return;
+        }
+
+        // Construir tabla
+        const tabla = `
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Nombre</th>
+                  <th>Me debe ($)</th>
+                  <th>Cuotas a cobrar</th>
+                  <th>Le debo ($)</th>
+                  <th>Cuotas a pagar</th>
+                  <th>Balance</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${datos.map(f => {
+                  const balance = (f.me_debe || 0) - (f.le_debo || 0);
+                  const badgeClass = balance >= 0 ? 'badge-green' : 'badge-red';
+                  const signo     = balance >= 0 ? '+' : '';
+                  return `
+                    <tr>
+                      <td><strong>${capitalizar(f.nombre)}</strong></td>
+                      <td>${formatPeso(f.me_debe)}</td>
+                      <td>${f.cuotas_cobrar}</td>
+                      <td>${formatPeso(f.le_debo)}</td>
+                      <td>${f.cuotas_pagar}</td>
+                      <td><span class="badge ${badgeClass}">${signo}${formatPeso(balance)}</span></td>
+                    </tr>
+                  `;
+                }).join('')}
+              </tbody>
+            </table>
+          </div>
+        `;
+        contenido.innerHTML = tabla;
+
+      } catch (err) {
+        subtitle.textContent = 'Error al cargar';
+        contenido.innerHTML = '';
+        errorContainer.innerHTML = `
+          <div class="error-box">
+            ⚠️ <strong>No se pudo conectar al servidor.</strong><br>
+            ${err.message}
+          </div>
+        `;
+      }
+    }
+
+    function formatPeso(n) {
+      return '$' + (n || 0).toLocaleString('es-AR');
+    }
+    function capitalizar(str) {
+      return str.replace(/\b\w/g, c => c.toUpperCase());
+    }
+
+    // Cargar al inicio
+    cargarDatos();
+  </script>
+</body>
+</html>
